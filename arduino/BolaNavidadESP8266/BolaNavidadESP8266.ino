@@ -34,12 +34,12 @@
 #include "SinricPro.h"
 #include "SinricProSwitch.h"
 
-#define WIFI_SSID         "HOMEFIBER2"    
+#define WIFI_SSID         "HOMEFIBER24"    
 #define WIFI_PASS         "1A2B3C4D5E6F"
 #define APP_KEY           "89a23f05-9a59-43ca-b889-950628ec3313"      // Should look like "de0bxxxx-1x3x-4x3x-ax2x-5dabxxxxxxxx"
 #define APP_SECRET        "ba22c9d2-4225-4646-ac66-462f7f1a3e82-7f62173e-db80-4bc5-a9a1-b45e075b9098"   // Should look like "5f36xxxx-x3x7-4x3x-xexe-e86724a9xxxx-4c4axxxx-3x3x-x5xe-x9x3-333d65xxxxxx"
-#define SWITCH_LUZ_ID         "69511a866dbd335b28fcd34d"    // Should look like "5dc1564130xxxxxxxxxxxxxx"
-#define SWITCH_BOLA_ID         "69511a16729a4887d7ebf630"    // Should look like "5dc1564130xxxxxxxxxxxxxx"
+#define SWITCH_LUZ_ID         "61b08c50695fce5c87487e3a"    // Should look like "5dc1564130xxxxxxxxxxxxxx"
+#define SWITCH_BOLA_ID         "61b08b30695fce5c87487d5c"    // Should look like "5dc1564130xxxxxxxxxxxxxx"
 #define BAUD_RATE         9600                // Change baudrate to your need
 
 #define LUZ_PIN   D2   // GPIO for LED (inverted)
@@ -60,9 +60,10 @@
  */
 bool onPowerState(const String &deviceId, bool &state) {
   Serial.printf("Device %s turned %s (via SinricPro) \r\n", deviceId.c_str(), state?"on":"off");
-  if(deviceId == "69511a866dbd335b28fcd34d"){
+  
+  if(deviceId == "61b08c50695fce5c87487e3a"){
       digitalWrite(LUZ_PIN, state?HIGH:LOW);
-  }else if(deviceId == "69511a16729a4887d7ebf630"){
+  }else if(deviceId == "61b08b30695fce5c87487d5c"){
     digitalWrite(BOLA_PIN, state?HIGH:LOW);
   }
   return true; // request handled properly

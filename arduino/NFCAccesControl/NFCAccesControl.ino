@@ -169,7 +169,7 @@ void writeNFCCard(){
         print("Sector 1 (Blocks 4 a 7) autenticated");
         uint8_t data[16];
         generateRandomValues(data,sizeof data);
-        success = nfc.mifareclassic_WriteDataBlock (1, data);
+        success = nfc.mifareclassic_WriteDataBlock (4, data);
     
         if (success){          
           print("Data wrote in block");   
@@ -177,6 +177,7 @@ void writeNFCCard(){
           if(!TEST_MODE){
             newCard(data,"USER xxxxx",1);
           }       
+          writeMode = false;
         }else{
           print("Failure to write data");   
         }
@@ -187,9 +188,14 @@ void writeNFCCard(){
 }
 
 void generateRandomValues(uint8_t* values, unsigned long length) {
-  randomSeed(D0);
+  randomSeed(millis());
   for (int i = 0; i < length; i++) {
-    values[i] = (uint8_t)random(0, 256);
+    uint8_t val = random(0,127);
+    if(isGraph(val)){
+      values[i] = val;
+    }else{
+      i--;
+    }
   }
 }
 
@@ -230,4 +236,5 @@ void readNFCCard(){
           print("Not success to autenticate");
       }
   }
+  writeMode = digitalRead(D7) == HIGH;
 }

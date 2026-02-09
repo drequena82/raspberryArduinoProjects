@@ -11,9 +11,31 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+/**
+Sectores: 16 sectores en total.
+Bloques por sector: 
+  Cada sector tiene 4 bloques (0, 1, 2 y 3).
+Capacidad de bloque: 
+  Cada bloque tiene 16 bytes.
+Total de bloques: 16 * 4 = 64 
+  Capacidad total: 64 * 16 bytes = 1024 bytes (1K).
 
+Es importante recordar que no todos los bloques están disponibles para guardar datos de usuario:
+1. Data Blocks (Bloques de datos): Son los bloques 0, 1 y 2 de cada sector. 
+  Se usan para almacenar tu información.
+2. Sector Trailer (Bloque 3): Es el último bloque de cada sector. 
+  Contiene las **Keys A y B** y los **Access Bits**. 
+No debe usarse para datos generales.
+3. Manufacturer Block (Bloque 0 del Sector 0): 
+  Contiene el UID (identificador único) de la tarjeta y 
+  datos del fabricante. En las tarjetas estándar, este bloque viene bloqueado de fábrica y es de **solo lectura**.
+
+> **Dato curioso:** Aunque la tarjeta se llama "1K", el espacio real disponible para datos de usuario 
+(restando los trailers y el bloque del fabricante) es de **752 bytes**.
+
+*/
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
 
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 // The pins for I2C are defined by the Wire-library. 
@@ -21,27 +43,24 @@
 // On an arduino MEGA 2560: 20(SDA), 21(SCL)
 // On an arduino LEONARDO:   2(SDA),  3(SCL), ...
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3D ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
 #define PN532_IRQ   (2)
 #define PN532_RESET (3)
-#define MODE_PIN (7)
 #define MAX_TIME (5000)
-#define DEVICE_LEVEL (1)
 
 bool writeMode = false;
-unsigned long buttonTime = 0;
 Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET);
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
+uint8_t nfc_key[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 void setup() {
   Serial.begin(115200);
   while (!Serial) delay(10); // for Leonardo/Micro/Zero
-
-  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  pinMode(D7,INPUT);
+  pinMode(D8,OUTPUT);
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    print(F("SSD1306 allocation failed"));
+    Serial.print(F("SSD1306 allocation failed"));
     for(;;); // Don't proceed, loop forever
   }
 
@@ -53,7 +72,6 @@ void setup() {
   // Clear the buffer
   display.clearDisplay();
 
-  print("Starting access control!");
   print("Starting access control!");
 
   nfc.begin();
@@ -73,19 +91,17 @@ void setup() {
 
   // Inizialice wifi
   connectWiFi_STA();
+  delay(2000);
+  writeMode = digitalRead(D7) == HIGH;
   print("Waiting for an ISO14443A Card ...");
 }
 
 void loop() {
-  manageMode();
   if(writeMode){
     writeNFCCard();
   }else{
     readNFCCard();
   }
-
-  // Wait a bit before trying again
-  print("\n\nSend a character to scan another tag!");
   Serial.flush();
   delay(2000);
 }
@@ -96,47 +112,12 @@ void loop() {
 void print(String text) {
   Serial.println(text);
   display.clearDisplay();
-  display.setTextSize(2); // Draw 2X-scale text
+  display.setTextSize(1); // Draw 2X-scale text
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(10, 0);
   display.println(text);
   display.display();      // Show initial text
-  delay(100);
-
-  // Scroll in various directions, pausing in-between:
-  /*
-  display.startscrollright(0x00, 0x0F);
-  delay(2000);
-  display.stopscroll();
-  delay(1000);
-  display.startscrollleft(0x00, 0x0F);
-  delay(2000);
-  display.stopscroll();
-  delay(1000);
-  display.startscrolldiagright(0x00, 0x07);
-  delay(2000);
-  display.startscrolldiagleft(0x00, 0x07);
-  delay(2000);
-  display.stopscroll();
-  */
-}
-
-/**
-  Function to manage read/write mode
-*/
-void manageMode(){
-  int buttonDown = digitalRead(MODE_PIN);
-  if(buttonDown == HIGH){
-    if(buttonTime == 0){
-      buttonTime = millis();
-    }
-    if(buttonTime > 0 && (millis() - buttonTime) > MAX_TIME){
-      writeMode = !writeMode;
-      print("Mode changed!");
-    }
-  }else{
-    buttonTime = 0;
-  }
+  delay(500);
 }
 
 char* getCardData(uint8_t* data){
@@ -152,7 +133,7 @@ char* getCardData(uint8_t* data){
 void checkKey(uint8_t* data){
   char* strData = getCardData(data);
   print("Sending card data...");
-  JsonDocument doc = getCardCredentials(strData);
+  JsonDocument doc = TEST_MODE ? getMock() : getCardCredentials(strData);
   if(!doc["level"]){
     print("Send error!");
   }else{
@@ -165,12 +146,13 @@ void unlock(JsonDocument doc){
   String name = String(doc["username"]);
   if(level <= DEVICE_LEVEL){
     print("Welcome " + name);
-    digitalWrite(D7, HIGH);
+    digitalWrite(D8, HIGH);
     delay(5000);
   }else{
     print("Not allowed " + name);
   }
-  digitalWrite(D7, LOW);
+  print("Locked!");
+  digitalWrite(D8, LOW);
 }
 
 void writeNFCCard(){
@@ -181,18 +163,20 @@ void writeNFCCard(){
   success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);  
   if (success) {
       print("Trying autentificate block 4 with key KEYA");
-      uint8_t keya[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-
-      success = nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keya);   
+      //Autentication with sector 1, block 4
+      success = nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, nfc_key);   
       if (success){
         print("Sector 1 (Blocks 4 a 7) autenticated");
         uint8_t data[16];
- 
-        memcpy(data, (const uint8_t[]){ 'l', 'u', 'i', 's', 'l', 'l', 'a', 'm', 'a', 's', '.', 'e', 's', 0, 0, 0 }, sizeof data);
-        success = nfc.mifareclassic_WriteDataBlock (4, data);
+        generateRandomValues(data,sizeof data);
+        success = nfc.mifareclassic_WriteDataBlock (1, data);
     
         if (success){          
-          print("Data wrote in block 4");         
+          print("Data wrote in block");   
+          nfc.PrintHexChar(data, 16);
+          if(!TEST_MODE){
+            newCard(data,"USER xxxxx",1);
+          }       
         }else{
           print("Failure to write data");   
         }
@@ -200,6 +184,13 @@ void writeNFCCard(){
         print("Failure to authenticate");
       }
     }
+}
+
+void generateRandomValues(uint8_t* values, unsigned long length) {
+  randomSeed(D0);
+  for (int i = 0; i < length; i++) {
+    values[i] = (uint8_t)random(0, 256);
+  }
 }
 
 void readNFCCard(){
@@ -216,17 +207,13 @@ void readNFCCard(){
     // Display some basic information about the card
     print("Found an ISO14443A card");
     Serial.print("  UID Length: ");
-    Serial.print(uidLength, DEC);
-    print(" bytes");
+    Serial.print(uidLength);
+    Serial.print(" bytes");
     Serial.print("  UID Value: ");
     nfc.PrintHex(uid, uidLength);
-    print("");
-    if (uidLength == 4){
       print("Seems to be an MIFARE Classic tag (4 byte UID)");
       print("Trying autentificate block 4 with key KEYA");
-      uint8_t keya[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-
-      success = nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keya);   
+      success = nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, nfc_key);   
       if (success){
         print("Sector 1 (Blocks 4 to 7) autenticated: ");
           uint8_t data[16];
@@ -242,6 +229,5 @@ void readNFCCard(){
       }else{
           print("Not success to autenticate");
       }
-    }
   }
 }

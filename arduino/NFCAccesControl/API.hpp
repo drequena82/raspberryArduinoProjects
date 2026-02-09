@@ -1,3 +1,15 @@
+#include <AESLib.h>
+
+AESLib aesLib;
+void encryptData(uint8_t* data, uint8_t* key) {
+  // En AES, el bloque de entrada suele ser de 16 bytes
+  aesLib.encrypt(data, 16, data, key, 128, NULL);
+}
+
+void decryptData(uint8_t* data, uint8_t* key) {
+  aesLib.decrypt(data, 16, data, key, 128, NULL);
+}
+
 String processResponse(int httpCode, HTTPClient& http){
 	String responseData = "{}";
 	if (httpCode > 0) {
@@ -17,7 +29,7 @@ String processResponse(int httpCode, HTTPClient& http){
 String getToken(String username, String password){
 	HTTPClient http;
 	WiFiClient client;
-	if(http.begin(client, apiHost + "/login")){
+	if(http.begin(client, API_HOST + "/login")){
 		// Build a json with credentials
 		String message = "";
 		JsonDocument jsonDoc;
@@ -50,9 +62,9 @@ JsonDocument getCardCredentials(char* keyId){
 	WiFiClient client;
 	JsonDocument doc;
 	String strKeyId = String(keyId);
-	if(http.begin(client, apiHost + "/keyCard/" + strKeyId)){
+	if(http.begin(client, API_HOST + "/keyCard/" + strKeyId)){
 		http.addHeader("Content-Type", "application/json");
-		String token = getToken(username,userpass);
+		String token = getToken(USERNAME,USERPASS);
 		if(token == "error"){
 			return doc;
 		}
@@ -70,14 +82,14 @@ JsonDocument getCardCredentials(char* keyId){
 	return doc;
 }
 
-JsonDocument newCard(String keyId, String username, uint level){
+JsonDocument newCard(uint8_t* keyId, String username, uint level){
 	HTTPClient http;
 	WiFiClient client;
 	JsonDocument doc;
 
-	if(http.begin(client, apiHost + "/keyCard/new")){
+	if(http.begin(client, API_HOST + "/keyCard/new")){
 		http.addHeader("Content-Type", "application/json");
-		String token = getToken(username,userpass);
+		String token = getToken(USERNAME,USERPASS);
 		if(token == "error"){
 			return doc;
 		}
@@ -86,7 +98,7 @@ JsonDocument newCard(String keyId, String username, uint level){
 		String message = "";
 		JsonDocument jsonDoc;
 		jsonDoc["username"] = username;
-		jsonDoc["keyId"] = keyId;
+		jsonDoc["keyId"] = keyId;//encryptData(keyId,KEY);
 		jsonDoc["level"] = level;
 		serializeJson(jsonDoc, message);
 		Serial.println(message);
@@ -108,5 +120,10 @@ JsonDocument newCard(String keyId, String username, uint level){
 	return doc;
 }
 
-
+JsonDocument getMock(){
+  JsonDocument jsonDoc;
+	jsonDoc["level"] = 1;
+	jsonDoc["username"] = "User 1345";
+  return jsonDoc;
+}
 
